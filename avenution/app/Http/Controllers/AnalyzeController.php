@@ -54,9 +54,21 @@ class AnalyzeController extends Controller
             'cholesterol' => $request->cholesterol,
             'activity_level' => $request->activity_level,
             'dietary_restriction' => $request->dietary_restriction,
-            'health_goal' => $request->health_goal,
+            'goal' => $request->goal,
             'bmi' => $bmi,
             'bmi_category' => $bmiCategory,
+        ]);
+
+        // Calculate daily calories and predictions
+        $dailyCalories = $this->bodyAnalysisService->calculateDailyCalories($analysis);
+        $dietType = $this->bodyAnalysisService->predictDietType($analysis);
+        $conditions = $this->bodyAnalysisService->detectHealthConditions($analysis);
+
+        // Update analysis with predictions
+        $analysis->update([
+            'predicted_diet_type' => $dietType,
+            'health_conditions' => json_encode($conditions),
+            'daily_calorie_target' => $dailyCalories,
         ]);
 
         // Generate food recommendations
