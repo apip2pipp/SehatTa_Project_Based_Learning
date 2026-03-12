@@ -13,10 +13,26 @@ class FoodController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $foods = Food::latest()->paginate(15);
-        return view('admin.foods.index', compact('foods'));
+        $query = Food::query();
+
+        // Search by name
+        if ($request->filled('search')) {
+            $query->where('name', 'like', '%' . $request->search . '%');
+        }
+
+        // Filter by category
+        if ($request->filled('category')) {
+            $query->where('category', $request->category);
+        }
+
+        $foods = $query->latest()->paginate(20);
+        
+        // Get all categories for filter dropdown
+        $categories = Food::select('category')->distinct()->pluck('category');
+
+        return view('admin.foods.index', compact('foods', 'categories'));
     }
 
     /**
