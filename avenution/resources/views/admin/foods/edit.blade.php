@@ -44,10 +44,13 @@
                                 <select name="category" id="category" required
                                     class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
                                     <option value="">Select category</option>
-                                    <option value="breakfast" {{ old('category', $food->category) === 'breakfast' ? 'selected' : '' }}>Breakfast</option>
-                                    <option value="lunch" {{ old('category', $food->category) === 'lunch' ? 'selected' : '' }}>Lunch</option>
-                                    <option value="dinner" {{ old('category', $food->category) === 'dinner' ? 'selected' : '' }}>Dinner</option>
-                                    <option value="snack" {{ old('category', $food->category) === 'snack' ? 'selected' : '' }}>Snack</option>
+                                    <option value="Protein Hewani" {{ old('category', $food->category) === 'Protein Hewani' ? 'selected' : '' }}>Protein Hewani</option>
+                                    <option value="Protein Nabati" {{ old('category', $food->category) === 'Protein Nabati' ? 'selected' : '' }}>Protein Nabati</option>
+                                    <option value="Karbohidrat" {{ old('category', $food->category) === 'Karbohidrat' ? 'selected' : '' }}>Karbohidrat</option>
+                                    <option value="Sayuran" {{ old('category', $food->category) === 'Sayuran' ? 'selected' : '' }}>Sayuran</option>
+                                    <option value="Buah" {{ old('category', $food->category) === 'Buah' ? 'selected' : '' }}>Buah</option>
+                                    <option value="Dairy" {{ old('category', $food->category) === 'Dairy' ? 'selected' : '' }}>Dairy</option>
+                                    <option value="Lainnya" {{ old('category', $food->category) === 'Lainnya' ? 'selected' : '' }}>Lainnya</option>
                                 </select>
                                 @error('category')
                                     <p class="mt-1 text-sm text-red-500">{{ $message }}</p>
@@ -142,11 +145,44 @@
 
                             <div>
                                 <label for="fiber" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Fiber (g) <span class="text-red-500">*</span>
+                                    Fiber (g)
                                 </label>
-                                <input type="number" name="fiber" id="fiber" value="{{ old('fiber', $food->fiber) }}" required min="0" step="0.1"
+                                <input type="number" name="fiber" id="fiber" value="{{ old('fiber', $food->fiber) }}" min="0" step="0.1"
                                     class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
                                 @error('fiber')
+                                    <p class="mt-1 text-sm text-red-500">{{ $message }}</p>
+                                @enderror
+                            </div>
+
+                            <div>
+                                <label for="sugars" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Sugars (g)
+                                </label>
+                                <input type="number" name="sugars" id="sugars" value="{{ old('sugars', $food->sugars) }}" min="0" step="0.1"
+                                    class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                @error('sugars')
+                                    <p class="mt-1 text-sm text-red-500">{{ $message }}</p>
+                                @enderror
+                            </div>
+
+                            <div>
+                                <label for="sodium" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Sodium (mg)
+                                </label>
+                                <input type="number" name="sodium" id="sodium" value="{{ old('sodium', $food->sodium) }}" min="0" step="0.1"
+                                    class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                @error('sodium')
+                                    <p class="mt-1 text-sm text-red-500">{{ $message }}</p>
+                                @enderror
+                            </div>
+
+                            <div>
+                                <label for="cholesterol" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Cholesterol (mg)
+                                </label>
+                                <input type="number" name="cholesterol" id="cholesterol" value="{{ old('cholesterol', $food->cholesterol) }}" min="0" step="0.1"
+                                    class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                                @error('cholesterol')
                                     <p class="mt-1 text-sm text-red-500">{{ $message }}</p>
                                 @enderror
                             </div>
@@ -160,9 +196,9 @@
                         <div class="grid md:grid-cols-2 gap-6">
                             <div>
                                 <label for="dietary_tags" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Dietary Tags <span class="text-red-500">*</span>
+                                    Dietary Tags
                                 </label>
-                                <input type="text" name="dietary_tags" id="dietary_tags" value="{{ old('dietary_tags', implode(', ', $food->dietary_tags)) }}" required
+                                <input type="text" name="dietary_tags" id="dietary_tags" value="{{ old('dietary_tags', is_array($food->dietary_tags) ? implode(', ', $food->dietary_tags) : '') }}"
                                     class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     placeholder="vegetarian, gluten-free, low-sodium">
                                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Separate multiple tags with commas</p>
@@ -173,9 +209,9 @@
 
                             <div>
                                 <label for="health_benefits" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Health Benefits <span class="text-red-500">*</span>
+                                    Health Benefits
                                 </label>
-                                <input type="text" name="health_benefits" id="health_benefits" value="{{ old('health_benefits', implode(', ', $food->health_benefits)) }}" required
+                                <input type="text" name="health_benefits" id="health_benefits" value="{{ old('health_benefits', is_array($food->health_benefits) ? implode(', ', $food->health_benefits) : '') }}"
                                     class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     placeholder="Heart-healthy, High fiber, Rich in vitamins">
                                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Separate multiple benefits with commas</p>
