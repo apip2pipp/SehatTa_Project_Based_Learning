@@ -8,26 +8,39 @@ use App\Models\Recommendation;
 
 class RecommendationService
 {
+    protected $bodyAnalysisService;
+
+    public function __construct(BodyAnalysisService $bodyAnalysisService)
+    {
+        $this->bodyAnalysisService = $bodyAnalysisService;
+    }
+
     /**
      * Generate food recommendations based on analysis
-     * Uses simplified Naive Bayes approach with rule-based filtering
+     * Uses Naive Bayes-inspired approach with rule-based filtering
      * 
      * @param Analysis $analysis
      * @return array Array of recommendations with food data
      */
     public function generateRecommendations(Analysis $analysis): array
     {
+        // Get predicted diet type using Naive Bayes
+        $predictedDietType = $this->bodyAnalysisService->predictDietType($analysis);
+        $conditions = $this->bodyAnalysisService->detectHealthConditions($analysis);
+        $dailyCalories = $this->bodyAnalysisService->calculateDailyCalories($analysis);
+
+        // Get all foods and filter based on diet type and conditions
         $allFoods = Food::all();
         $scoredFoods = [];
 
         foreach ($allFoods as $food) {
-            $score = $this->calculateMatchScore($food, $analysis);
+            $score = $this->calculateMatchScore($food, $analysis, $predictedDietType, $conditions);
             
-            if ($score > 70) { // Only include foods with >70% match
+            if ($score > 60) { // Only include foods with >60% match
                 $scoredFoods[] = [
                     'food' => $food,
                     'score' => $score,
-                    'timing' => $this->determineMealTiming($food->category),
+                    'timing' => $this->determineMealTiming($food),
                 ];
             }
         }
@@ -37,28 +50,14 @@ class RecommendationService
             return $b['score'] - $a['score'];
         });
 
-        // Group by timing and select top foods for each meal
-        $recommendations = [];
-        $timings = ['morning', 'afternoon', 'evening', 'snack'];
-        
-        foreach ($timings as $timing) {
-            $timingFoods = array_filter($scoredFoods, fn($item) => $item['timing'] === $timing);
-            $topFood = reset($timingFoods);
-            
-            if ($topFood) {
-                $recommendations[] = $topFood;
-            }
-        }
+        // Get diverse recommendations (different meal types)
+        $recommendations = $this->selectDiverseRecommendations($scoredFoods, 8);
 
-        // If we have less than 4 recommendations, add more top-scored foods
-        if (count($recommendations) < 4) {
-            $remaining = array_slice($scoredFoods, 0, 6);
-            foreach ($remaining as $item) {
-                if (count($recommendations) >= 6) break;
-                if (!in_array($item, $recommendations)) {
-                    $recommendations[] = $item;
-                }
-            }
+        // Add metadata
+        foreach ($recommendations as &$rec) {
+            $rec['diet_type'] = $predictedDietType;
+            $rec['conditions'] = $conditions;
+            $rec['daily_calorie_target'] = $dailyCalories;
         }
 
         return $recommendations;
@@ -66,105 +65,188 @@ class RecommendationService
 
     /**
      * Calculate match score for a food based on user's health profile
-     * Simplified Naive Bayes-inspired scoring
+     * Enhanced Naive Bayes-inspired scoring
      * 
      * @param Food $food
      * @param Analysis $analysis
+     * @param string $dietType Predicted diet type
+     * @param array $conditions Detected health conditions
      * @return int Match score (0-100)
      */
-    private function calculateMatchScore(Food $food, Analysis $analysis): int
+    private function calculateMatchScore(
+        Food $food, 
+        Analysis $analysis, 
+        string $dietType, 
+        array $conditions
+    ): int
     {
-        $score = 75; // Base score
+        $score = 70; // Base score
 
-        // BMI-based adjustments
-        if ($analysis->bmi < 18.5) {
-            // Underweight - prefer higher calorie foods
-            if ($food->calories > 350) $score += 10;
-            if ($food->protein > 20) $score += 5;
-        } elseif ($analysis->bmi >= 25) {
-            // Overweight/Obese - prefer lower calorie, high fiber foods
-            if ($food->calories < 350) $score += 10;
-            if ($food->fiber >= 8) $score += 8;
-            if ($food->fiber >= 5) $score += 5;
-        }
-
-        // Blood pressure adjustments
-        if ($analysis->blood_pressure_systolic >= 130) {
-            // High BP - prefer low sodium, heart-healthy foods
-            if (in_array('heart-healthy', $food->health_benefits ?? [])) $score += 10;
-            if (in_array('low-sodium', $food->dietary_tags ?? [])) $score += 8;
-        }
-
-        // Blood sugar adjustments
-        if ($analysis->blood_sugar >= 100) {
-            // High blood sugar - prefer low glycemic foods
-            if ($food->fiber >= 5) $score += 10;
-            if ($food->carbs < 40) $score += 8;
-            if (in_array('Low glycemic', $food->health_benefits ?? [])) $score += 8;
-        }
-
-        // Cholesterol adjustments
-        if ($analysis->cholesterol >= 200) {
-            // High cholesterol - prefer omega-3, high fiber
-            if (in_array('Omega-3', $food->health_benefits ?? [])) $score += 10;
-            if (in_array('Cholesterol reduction', $food->health_benefits ?? [])) $score += 10;
-            if ($food->fiber >= 8) $score += 5;
-        }
-
-        // Dietary restriction matching
-        if ($analysis->dietary_restriction !== 'none') {
-            $dietaryTags = $food->dietary_tags ?? [];
+        // ============================================
+        // DIET TYPE MATCHING (Naive Bayes Result)
+        // ============================================
+        if ($dietType === 'Low_Carb') {
+            if ($food->carbs < 20) {
+                $score += 20;
+            } elseif ($food->carbs < 40) {
+                $score += 10;
+            } else {
+                $score -= 15; // Penalty for high carb
+            }
             
-            if ($analysis->dietary_restriction === 'vegetarian') {
-                if (in_array('vegetarian', $dietaryTags) || in_array('vegan', $dietaryTags)) {
+            if ($food->protein > 20) $score += 10;
+            if ($food->fat > 10) $score += 5;
+        }
+
+        if ($dietType === 'Low_Sodium') {
+            // Since our nutrition.csv doesn't have sodium data,
+            // we prefer fresh, unprocessed foods
+            $lowSodiumCategories = ['Buah', 'Sayuran', 'Protein Nabati'];
+            if (in_array($food->category, $lowSodiumCategories)) {
+                $score += 20;
+            }
+        }
+
+        if ($dietType === 'High_Protein') {
+            if ($food->protein > 25) {
+                $score += 25;
+            } elseif ($food->protein > 15) {
+                $score += 15;
+            }
+        }
+
+        if ($dietType === 'Balanced') {
+            // Balanced macronutrients
+            $totalMacros = $food->protein + $food->carbs + $food->fat;
+            if ($totalMacros > 0) {
+                $proteinRatio = ($food->protein * 4) / ($totalMacros * 4) * 100;
+                if ($proteinRatio >= 20 && $proteinRatio <= 35) {
                     $score += 15;
-                } else {
-                    $score -= 30; // Significant penalty for non-matching
-                }
-            } elseif ($analysis->dietary_restriction === 'vegan') {
-                if (in_array('vegan', $dietaryTags)) {
-                    $score += 15;
-                } else {
-                    $score -= 30;
-                }
-            } elseif ($analysis->dietary_restriction === 'gluten-free') {
-                if (in_array('gluten-free', $dietaryTags)) {
-                    $score += 10;
                 }
             }
         }
 
-        // Health goal matching
+        // ============================================
+        // HEALTH CONDITION FILTERING
+        // ============================================
+        if (in_array('Diabetes', $conditions)) {
+            // Low carb, high fiber
+            if ($food->carbs < 30) $score += 15;
+            if ($food->fiber >= 5) $score += 10;
+            
+            // Avoid high carb foods
+            if ($food->carbs > 50) $score -= 20;
+        }
+
+        if (in_array('Hypertension', $conditions)) {
+            // Prefer fruits, vegetables, whole grains
+            $heartHealthy = ['Buah', 'Sayuran', 'Karbohidrat'];
+            if (in_array($food->category, $heartHealthy)) {
+                $score += 15;
+            }
+            
+            // Avoid processed/high sodium (we assume certain categories are processed)
+            if (str_contains(strtolower($food->name), 'goreng') || 
+                str_contains(strtolower($food->name), 'asin')) {
+                $score -= 20;
+            }
+        }
+
+        if (in_array('Obesity', $conditions)) {
+            // Low calorie, high fiber, moderate protein
+            if ($food->calories < 200) {
+                $score += 20;
+            } elseif ($food->calories < 350) {
+                $score += 10;
+            } else {
+                $score -= 10;
+            }
+            
+            if ($food->fiber >= 5) $score += 10;
+            if ($food->protein > 15) $score += 8;
+        }
+
+        if (in_array('High_Cholesterol', $conditions)) {
+            // High fiber, avoid high fat
+            if ($food->fiber >= 5) $score += 15;
+            if ($food->fat < 10) $score += 10;
+            
+            // Plant-based proteins preferred
+            if ($food->category === 'Protein Nabati') $score += 12;
+        }
+
+        // ============================================
+        // BMI-BASED ADJUSTMENTS
+        // ============================================
+        if ($analysis->bmi < 18.5) {
+            // Underweight - prefer higher calorie foods
+            if ($food->calories > 350) $score += 12;
+            if ($food->protein > 20) $score += 8;
+        } elseif ($analysis->bmi >= 30) {
+            // Obese - prefer lower calorie, nutrient-dense foods
+            if ($food->calories < 250) $score += 15;
+            if ($food->calories < 150) $score += 8;
+        } elseif ($analysis->bmi >= 25) {
+            // Overweight
+            if ($food->calories < 300) $score += 10;
+        }
+
+        // ============================================
+        // HEALTH GOAL MATCHING
+        // ============================================
         switch ($analysis->health_goal) {
-            case 'weight_loss':
-                if ($food->calories < 300) $score += 10;
-                if ($food->fiber >= 5) $score += 5;
-                if ($food->protein > 15) $score += 5;
+            case 'lose_weight':
+                if ($food->calories < 250) $score += 12;
+                if ($food->protein > 15) $score += 8;
+                if ($food->fiber >= 5) $score += 8;
                 break;
             
-            case 'muscle_gain':
-                if ($food->protein > 25) $score += 15;
-                if ($food->calories > 350) $score += 5;
+            case 'gain_muscle':
+            case 'gain_weight':
+                if ($food->protein > 25) $score += 18;
+                if ($food->calories > 350) $score += 10;
+                if ($food->category === 'Protein Hewani') $score += 10;
                 break;
             
-            case 'heart_health':
-                if (in_array('Heart-healthy', $food->health_benefits ?? [])) $score += 15;
-                if (in_array('Omega-3', $food->health_benefits ?? [])) $score += 10;
-                break;
-            
-            case 'balanced':
+            case 'maintain':
             default:
-                // Prefer balanced macros
-                if ($food->protein >= 15 && $food->protein <= 30) $score += 5;
-                if ($food->fiber >= 5) $score += 5;
+                if ($food->calories >= 200 && $food->calories <= 400) $score += 10;
                 break;
         }
 
-        // Activity level adjustments
-        if ($analysis->activity_level === 'high' && $food->calories > 400) {
-            $score += 5;
-        } elseif ($analysis->activity_level === 'low' && $food->calories < 300) {
-            $score += 5;
+        // ============================================
+        // ACTIVITY LEVEL ADJUSTMENTS
+        // ============================================
+        if (in_array($analysis->activity_level, ['active', 'very_active'])) {
+            // Need more energy
+            if ($food->calories > 300) $score += 8;
+            if ($food->protein > 20) $score += 8;
+        } elseif ($analysis->activity_level === 'sedentary') {
+            // Need less calories
+            if ($food->calories < 300) $score += 10;
+        }
+
+        // ============================================
+        // DIETARY RESTRICTION FILTERING
+        // ============================================
+        if ($analysis->dietary_restriction !== 'none') {
+            $dietaryTags = $food->dietary_tags ?? [];
+            
+            if ($analysis->dietary_restriction === 'vegetarian') {
+                $vegCategories = ['Sayuran', 'Buah', 'Protein Nabati', 'Karbohidrat', 'Dairy'];
+                if (in_array($food->category, $vegCategories)) {
+                    $score += 15;
+                } else {
+                    $score -= 40; // Strong penalty
+                }
+            } elseif ($analysis->dietary_restriction === 'vegan') {
+                $veganCategories = ['Sayuran', 'Buah', 'Protein Nabati', 'Karbohidrat'];
+                if (in_array($food->category, $veganCategories)) {
+                    $score += 15;
+                } else {
+                    $score -= 40;
+                }
+            }
         }
 
         // Ensure score is within bounds
@@ -172,20 +254,68 @@ class RecommendationService
     }
 
     /**
-     * Determine meal timing based on food category
+     * Determine meal timing based on food properties
      * 
-     * @param string $category
-     * @return string Timing (morning, afternoon, evening, snack)
+     * @param Food $food
+     * @return string Timing (Sarapan, Makan Siang, Makan Malam, Camilan)
      */
-    private function determineMealTiming(string $category): string
+    private function determineMealTiming(Food $food): string
     {
-        return match($category) {
-            'breakfast' => 'morning',
-            'lunch' => 'afternoon',
-            'dinner' => 'evening',
-            'snack' => 'snack',
-            default => 'afternoon',
-        };
+        if ($food->meal_type) {
+            return $food->meal_type;
+        }
+
+        // Fallback logic based on calories and category
+        if ($food->category === 'Buah' || $food->calories < 150) {
+            return 'Camilan';
+        }
+
+        if (in_array($food->category, ['Karbohidrat', 'Protein Hewani'])) {
+            return 'Makan Utama';
+        }
+
+        return 'Makan Utama';
+    }
+
+    /**
+     * Select diverse recommendations across different meal types
+     * 
+     * @param array $scoredFoods
+     * @param int $count
+     * @return array
+     */
+    private function selectDiverseRecommendations(array $scoredFoods, int $count = 8): array
+    {
+        $selected = [];
+        $categories = [];
+
+        // First pass: get top foods from different categories
+        foreach ($scoredFoods as $item) {
+            $category = $item['food']->category;
+            
+            if (!isset($categories[$category]) || count($categories[$category]) < 2) {
+                $categories[$category][] = $item;
+                $selected[] = $item;
+                
+                if (count($selected) >= $count) {
+                    break;
+                }
+            }
+        }
+
+        // If still need more, add remaining high-score foods
+        if (count($selected) < $count) {
+            foreach ($scoredFoods as $item) {
+                if (!in_array($item, $selected)) {
+                    $selected[] = $item;
+                    if (count($selected) >= $count) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        return $selected;
     }
 
     /**
@@ -197,6 +327,9 @@ class RecommendationService
      */
     public function saveRecommendations(Analysis $analysis, array $recommendations): void
     {
+        // Clear old recommendations for this analysis
+        Recommendation::where('analysis_id', $analysis->id)->delete();
+
         foreach ($recommendations as $recommendation) {
             Recommendation::create([
                 'analysis_id' => $analysis->id,
