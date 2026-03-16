@@ -205,4 +205,164 @@ class BodyAnalysisService
             return 'low';
         }
     }
+
+    /**
+     * Predict diet recommendation using Naive Bayes-inspired approach
+     * Based on user's health condition
+     * 
+     * @param Analysis $analysis
+     * @return string Diet type recommendation (Balanced, Low_Carb, Low_Sodium, High_Protein)
+     */
+    public function predictDietType(Analysis $analysis): string
+    {
+        $scores = [
+            'Balanced' => 0,
+            'Low_Carb' => 0,
+            'Low_Sodium' => 0,
+            'High_Protein' => 0,
+        ];
+
+        // BMI-based scoring
+        if ($analysis->bmi >= 30) {
+            // Obesity - prefer Low Carb for weight loss
+            $scores['Low_Carb'] += 30;
+            $scores['High_Protein'] += 20;
+        } elseif ($analysis->bmi >= 25) {
+            // Overweight
+            $scores['Low_Carb'] += 20;
+            $scores['Balanced'] += 15;
+            $scores['High_Protein'] += 10;
+        } elseif ($analysis->bmi < 18.5) {
+            // Underweight - need more calories
+            $scores['Balanced'] += 25;
+            $scores['High_Protein'] += 25;
+        } else {
+            // Normal BMI
+            $scores['Balanced'] += 30;
+        }
+
+        // Blood Pressure-based scoring
+        if ($analysis->blood_pressure_systolic >= 140 || $analysis->blood_pressure_diastolic >= 90) {
+            // Hypertension - MUST have Low Sodium
+            $scores['Low_Sodium'] += 40;
+        } elseif ($analysis->blood_pressure_systolic >= 130) {
+            $scores['Low_Sodium'] += 25;
+            $scores['Balanced'] += 10;
+        }
+
+        // Blood Sugar-based scoring
+        if ($analysis->blood_sugar >= 126) {
+            // Diabetic range - Low Carb is essential
+            $scores['Low_Carb'] += 40;
+        } elseif ($analysis->blood_sugar >= 100) {
+            // Pre-diabetic
+            $scores['Low_Carb'] += 25;
+            $scores['Balanced'] += 10;
+        }
+
+        // Cholesterol-based scoring
+        if ($analysis->cholesterol >= 240) {
+            $scores['Low_Carb'] += 15;
+            $scores['Balanced'] += 10;
+        }
+
+        // Activity level adjustment
+        if ($analysis->activity_level === 'sedentary') {
+            $scores['Low_Carb'] += 10;
+        } elseif ($analysis->activity_level === 'active' || $analysis->activity_level === 'very_active') {
+            $scores['High_Protein'] += 15;
+            $scores['Balanced'] += 10;
+        }
+
+        // Health goal consideration
+        if ($analysis->health_goal === 'lose_weight') {
+            $scores['Low_Carb'] += 20;
+            $scores['High_Protein'] += 10;
+        } elseif ($analysis->health_goal === 'gain_muscle') {
+            $scores['High_Protein'] += 30;
+        } elseif ($analysis->health_goal === 'maintain') {
+            $scores['Balanced'] += 20;
+        }
+
+        // Get the diet type with highest score
+        arsort($scores);
+        $predictedDiet = array_key_first($scores);
+
+        return $predictedDiet;
+    }
+
+    /**
+     * Get disease/condition based on health metrics
+     * 
+     * @param Analysis $analysis
+     * @return array List of detected conditions
+     */
+    public function detectHealthConditions(Analysis $analysis): array
+    {
+        $conditions = [];
+
+        // Diabetes detection
+        if ($analysis->blood_sugar >= 126) {
+            $conditions[] = 'Diabetes';
+        }
+
+        // Hypertension detection
+        if ($analysis->blood_pressure_systolic >= 140 || $analysis->blood_pressure_diastolic >= 90) {
+            $conditions[] = 'Hypertension';
+        }
+
+        // Obesity detection
+        if ($analysis->bmi >= 30) {
+            $conditions[] = 'Obesity';
+        }
+
+        // High Cholesterol
+        if ($analysis->cholesterol >= 240) {
+            $conditions[] = 'High_Cholesterol';
+        }
+
+        if (empty($conditions)) {
+            $conditions[] = 'None';
+        }
+
+        return $conditions;
+    }
+
+    /**
+     * Calculate daily caloric needs
+     * Using Mifflin-St Jeor Equation
+     * 
+     * @param Analysis $analysis
+     * @return int Recommended daily calories
+     */
+    public function calculateDailyCalories(Analysis $analysis): int
+    {
+        // BMR calculation
+        if (strtolower($analysis->gender) === 'male') {
+            $bmr = (10 * $analysis->weight) + (6.25 * $analysis->height) - (5 * $analysis->age) + 5;
+        } else {
+            $bmr = (10 * $analysis->weight) + (6.25 * $analysis->height) - (5 * $analysis->age) - 161;
+        }
+
+        // Activity multiplier
+        $activityMultipliers = [
+            'sedentary' => 1.2,
+            'lightly_active' => 1.375,
+            'moderately_active' => 1.55,
+            'active' => 1.725,
+            'very_active' => 1.9,
+        ];
+
+        $multiplier = $activityMultipliers[$analysis->activity_level] ?? 1.2;
+        $tdee = $bmr * $multiplier;
+
+        // Adjust based on health goal
+        if ($analysis->health_goal === 'lose_weight') {
+            $tdee *= 0.85; // 15% deficit
+        } elseif ($analysis->health_goal === 'gain_weight' || $analysis->health_goal === 'gain_muscle') {
+            $tdee *= 1.15; // 15% surplus
+        }
+
+        return (int) round($tdee);
+    }
 }
