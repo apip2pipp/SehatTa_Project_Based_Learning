@@ -23,12 +23,16 @@ class StoreFoodRequest extends FormRequest
     {
         return [
             'name' => 'required|string|max:255',
-            'category' => 'required|in:breakfast,lunch,dinner,snack',
+            'category' => 'required|in:Protein Hewani,Protein Nabati,Karbohidrat,Sayuran,Buah,Dairy,Lainnya',
             'calories' => 'required|integer|min:0|max:2000',
             'protein' => 'required|numeric|min:0|max:200',
             'carbs' => 'required|numeric|min:0|max:300',
             'fat' => 'required|numeric|min:0|max:200',
-            'fiber' => 'required|numeric|min:0|max:50',
+            'fiber' => 'nullable|numeric|min:0|max:50',
+            'sugars' => 'nullable|numeric|min:0|max:200',
+            'sodium' => 'nullable|numeric|min:0|max:5000',
+            'cholesterol' => 'nullable|numeric|min:0|max:500',
+            'meal_type' => 'nullable|string|max:255',
             'description' => 'nullable|string|max:1000',
             'image_url' => 'nullable|url|max:500',
             'dietary_tags' => 'nullable|string',
@@ -46,6 +50,12 @@ class StoreFoodRequest extends FormRequest
         if ($this->dietary_tags && is_string($this->dietary_tags)) {
             $this->merge([
                 'dietary_tags' => array_map('trim', explode(',', $this->dietary_tags)),
+            ]);
+        }
+        
+        if ($this->health_benefits && is_string($this->health_benefits)) {
+            $this->merge([
+                'health_benefits' => array_map('trim', explode(',', $this->health_benefits)),
             ]);
         }
         
