@@ -34,7 +34,7 @@
                 <div class="absolute inset-0 opacity-[0.04]" style="background-image: linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px); background-size: 40px 40px;"></div>
 
                 <!-- Content -->
-                <div class="relative z-10 flex flex-col h-full px-10 py-8">
+                <div class="relative z-10 flex flex-col h-full px-10 py-9 xl:py-10">
                     <!-- Logo -->
                     <div class="flex items-center gap-2.5">
                         <div class="w-9 h-9 rounded-xl bg-[#C62828] flex items-center justify-center shadow-lg shadow-red-900/50">
@@ -129,7 +129,7 @@
                     </div>
 
                     <!-- Testimonial -->
-                    <div class="bg-white/5 border border-white/10 rounded-2xl p-5 backdrop-blur-sm">
+                    <div class="mt-6 bg-white/5 border border-white/10 rounded-2xl p-5 backdrop-blur-sm xl:mt-7">
                         <div class="flex gap-0.5 mb-3">
                             @for($i = 0; $i < 5; $i++)
                             <svg class="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" viewBox="0 0 20 20">
@@ -185,7 +185,7 @@
                 </div>
 
                 <!-- Scrollable form area -->
-                <div class="flex-1 flex items-start justify-center px-6 py-10 overflow-y-auto">
+                <div class="flex-1 flex items-start justify-center px-6 py-12 lg:py-14 overflow-y-auto">
                     <div class="w-full max-w-[360px]">
                         {{ $slot }}
                     </div>
